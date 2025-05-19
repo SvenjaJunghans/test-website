@@ -10,49 +10,43 @@ function setup() {
 } 
 }
 
-let blobs = [];
+let lines = [];
 
 function setup() {
   createCanvas(800, 600);
+  stroke(255, 80);
   noFill();
-  for (let i = 0; i < 6; i++) {
-    blobs.push(new Blob(random(width), random(height), random(60, 150)));
+
+  for (let i = 0; i < 60; i++) {
+    lines.push(new FlowLine(i * 4));
   }
 }
 
 function draw() {
-  background(250, 248, 245); // warm white tone
+  background(40); // dunkelgrauer Hintergrund
 
-  for (let blob of blobs) {
-    blob.update();
-    blob.display();
+  for (let l of lines) {
+    l.update();
+    l.display();
   }
 }
 
-class Blob {
-  constructor(x, y, r) {
-    this.x = x;
-    this.y = y;
-    this.r = r;
-    this.offset = random(1000);
+class FlowLine {
+  constructor(yOffset) {
+    this.yOffset = yOffset;
+    this.t = random(1000);
   }
 
   update() {
-    this.offset += 0.01;
+    this.t += 0.005;
   }
 
   display() {
-    stroke(150, 120, 200, 80);
-    strokeWeight(2);
     beginShape();
-    for (let a = 0; a < TWO_PI; a += 0.1) {
-      let off = this.offset + cos(a) * 0.5;
-      let r = this.r + noise(off) * 40;
-      let x = this.x + cos(a) * r;
-      let y = this.y + sin(a) * r;
+    for (let x = 0; x <= width; x += 10) {
+      let y = this.yOffset + noise(x * 0.005, this.t) * 100;
       curveVertex(x, y);
     }
-    endShape(CLOSE);
+    endShape();
   }
 }
-
