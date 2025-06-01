@@ -1,10 +1,16 @@
 let lines = [];
+let noiseLayer;
+
+let colors;
+let currentIndex = 0;
+let nextIndex = 1;
+let lerpAmt = 0;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
   noFill();
 
-  // mehrere Linien anlegen
+  // Linien vorbereiten
   for (let j = 0; j < 20; j++) {
     let line = [];
     for (let i = 0; i < 200; i++) {
@@ -14,14 +20,53 @@ function setup() {
     }
     lines.push(line);
   }
+
+  // Farben definieren (Pastelltöne)
+  colors = [
+    color('#A8E6CF'), // Mintgrün
+    color('#DCEBF9'), // Himmelblau
+    color('#E0BBE4'), // Flieder
+    color('#FFDAB9'), // Pfirsich
+    color('#FFB6B9')  // Zartes Rosa
+  ];
+
+  // Körniger Lichtstaub als Overlay
+  noiseLayer = createGraphics(width, height);
+  noiseLayer.noStroke();
+  noiseLayer.clear();
+
+  for (let i = 0; i < 10000; i++) {
+    let x = random(width);
+    let y = random(height);
+    let brightness = random(150, 255);
+    noiseLayer.fill(brightness, 10); // fast weiß, sehr transparent
+    noiseLayer.ellipse(x, y, 1, 1);
+  }
 }
 
 function draw() {
-  background(30);
+  // Hintergrundfarbe interpolieren
+  let bgColor = lerpColor(colors[currentIndex], colors[nextIndex], lerpAmt);
+  background(bgColor);
+
+  // Übergang langsam steuern
+  lerpAmt += 0.001;
+  if (lerpAmt >= 1) {
+    lerpAmt = 0;
+    currentIndex = nextIndex;
+    nextIndex = (nextIndex + 1) % colors.length;
+  }
+
+  // Körniger Overlay
+  blendMode(ADD);
+  image(noiseLayer, 0, 0);
+  blendMode(BLEND);
+
+  // Wellenlinien
   stroke(255, 80);
   strokeWeight(1.2);
-
-  translate(-frameCount * 0.5 % width, 0); // unendliches Scrollen nach links
+  push();
+  translate(-frameCount * 0.5 % width, 0); // scrollend
 
   for (let j = 0; j < lines.length; j++) {
     beginShape();
@@ -32,4 +77,6 @@ function draw() {
     }
     endShape();
   }
+
+  pop();
 }
