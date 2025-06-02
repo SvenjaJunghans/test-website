@@ -10,12 +10,12 @@ function setup() {
   createCanvas(windowWidth, windowHeight);
   noFill();
 
-  // Linien vorbereiten
+  // Linien vorbereiten flex option einbauen
   for (let j = 0; j < 20; j++) {
     let line = [];
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < windowWidth/10; i++) {
       let x = i * 10;
-      let y = noise(i * 0.05, j * 0.1) * height;
+      let y = noise(i * 0.05, j * 1) * height;
       line.push({ x, y });
     }
     lines.push(line);
@@ -63,16 +63,16 @@ function draw() {
   blendMode(BLEND);
 
   // Wellenlinien
-  stroke(255, 80);
+  stroke(0);
   strokeWeight(1.2);
   push();
-  translate(-frameCount * 0.5 % width, 0); // scrollend
+  //translate(-frameCount * 0.5 % width, 0); // scrollend
 
   for (let j = 0; j < lines.length; j++) {
     beginShape();
     for (let i = 0; i < lines[j].length; i++) {
       let p = lines[j][i];
-      let offsetY = sin(frameCount * 0.01 + i * 0.05 + j * 0.1) * 30;
+      let offsetY = sin(frameCount * 0.03 + i * 0.05 + j * 0.1) * 30;
       curveVertex(p.x, p.y + offsetY);
     }
     endShape();
