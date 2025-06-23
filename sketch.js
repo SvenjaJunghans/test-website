@@ -1,82 +1,158 @@
+let sound;
+let fft;
 let lines = [];
-let noiseLayer;
-
 let colors;
-let currentIndex = 0;
-let nextIndex = 1;
-let lerpAmt = 0;
+
+let isRunning = false;
+let sessionType = 'Work';
+let timer = 25 * 60;
+let lastUpdate = 0;
+
+function preload() {
+  sound = loadSound('Groove.mp3');
+}
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
   noFill();
 
-  // Linien vorbereiten flex option einbauen
-  for (let j = 0; j < 20; j++) {
+  // UI
+  let ui = createDiv().id('ui');
+  ui.style('position', 'absolute');
+  ui.style('top', '20px');
+  ui.style('left', '20px');
+  ui.style('z-index', '10');
+
+  let box = createDiv().parent(ui);
+  box.style('background', 'rgba(255,255,255,0.6)');
+  box.style('padding', '12px 18px');
+  box.style('border-radius', '12px');
+  box.style('font-family', 'monospace');
+
+  let sessionText = createDiv('Session: ').parent(box);
+  createSpan('Work').id('session').parent(sessionText);
+
+  createDiv().parent(box);
+  let timeText = createDiv('Time Left: ').parent(box);
+  createSpan('25:00').id('time').parent(timeText);
+
+  createDiv().parent(box);
+  let startStopBtn = createButton('Start/Stop').parent(box);
+  startStopBtn.mousePressed(toggleTimer);
+
+  let resetBtn = createButton('Reset').parent(box);
+  resetBtn.mousePressed(resetTimer);
+
+  // Farben
+  colors = [
+    color('#A8E6CF'), color('#DCEBF9'), color('#E0BBE4'), color('#FFDAB9'), color('#FFB6B9'),
+    color('#B5EAD7'), color('#C7CEEA'), color('#FFDAC1'), color('#E2F0CB'), color('#FFB7B2')
+  ];
+
+  fft = new p5.FFT();
+  fft.setInput(sound);
+
+  createLines();
+}
+
+function createLines() {
+  lines = [];
+  let numLines = 10;
+  let numPoints = floor(width / 20);
+  for (let j = 0; j < numLines; j++) {
     let line = [];
-    for (let i = 0; i < windowWidth/10; i++) {
-      let x = i * 10;
-      let y = noise(i * 0.05, j * 1) * height;
+    for (let i = 0; i < numPoints; i++) {
+      let x = i * 20;
+      let y = height / 2 + j * 20 - 100;
       line.push({ x, y });
     }
     lines.push(line);
   }
-
-  // Farben definieren (Pastelltöne)
-  colors = [
-    color('#A8E6CF'), // Mintgrün
-    color('#DCEBF9'), // Himmelblau
-    color('#E0BBE4'), // Flieder
-    color('#FFDAB9'), // Pfirsich
-    color('#FFB6B9')  // Zartes Rosa
-  ];
-
-  // Körniger Lichtstaub als Overlay
-  noiseLayer = createGraphics(width, height);
-  noiseLayer.noStroke();
-  noiseLayer.clear();
-
-  for (let i = 0; i < 10000; i++) {
-    let x = random(width);
-    let y = random(height);
-    let brightness = random(150, 255);
-    noiseLayer.fill(brightness, 10); // fast weiß, sehr transparent
-    noiseLayer.ellipse(x, y, 1, 1);
-  }
 }
 
 function draw() {
-  // Hintergrundfarbe interpolieren
-  let bgColor = lerpColor(colors[currentIndex], colors[nextIndex], lerpAmt);
-  background(bgColor);
+  background(255);
+  updatePomodoro();
 
-  // Übergang langsam steuern
-  lerpAmt += 0.001;
-  if (lerpAmt >= 1) {
-    lerpAmt = 0;
-    currentIndex = nextIndex;
-    nextIndex = (nextIndex + 1) % colors.length;
-  }
-
-  // Körniger Overlay
-  blendMode(ADD);
-  image(noiseLayer, 0, 0);
-  blendMode(BLEND);
-
-  // Wellenlinien
-  stroke(0);
-  strokeWeight(1.2);
-  push();
-  //translate(-frameCount * 0.5 % width, 0); // scrollend
+  let spectrum = fft.analyze();
+  let bandsPerLine = floor(spectrum.length / lines.length);
+  let waveSpeed = 0.01;
+  let baseFreq = 0.01;
 
   for (let j = 0; j < lines.length; j++) {
+    stroke(colors[j % colors.length]);
+    strokeWeight(2);
+    noFill();
     beginShape();
+
+    // Energie im zugeordneten Bereich berechnen
+    let startBand = j * bandsPerLine;
+    let endBand = startBand + bandsPerLine;
+    let energy = 0;
+    for (let b = startBand; b < endBand; b++) {
+      energy += spectrum[b];
+    }
+    energy /= bandsPerLine;
+
+    let amp = map(energy, 0, 100, 10, 100);
+    amp = constrain(amp, 5, 120);
+
     for (let i = 0; i < lines[j].length; i++) {
       let p = lines[j][i];
-      let offsetY = sin(frameCount * 0.03 + i * 0.05 + j * 0.1) * 30;
+      let wave = sin(frameCount * waveSpeed + i * baseFreq * 100 + j * 10);
+      let offsetY = wave * amp;
       curveVertex(p.x, p.y + offsetY);
     }
+
     endShape();
   }
+}
 
-  pop();
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  createLines();
+}
+
+function toggleTimer() {
+  isRunning = !isRunning;
+  lastUpdate = millis();
+
+  if (sound.isPlaying()) {
+    sound.pause();
+  } else {
+    sound.loop();
+  }
+}
+
+function resetTimer() {
+  isRunning = false;
+  sessionType = 'Work';
+  timer = 25 * 60;
+  if (sound.isPlaying()) {
+    sound.pause();
+  }
+}
+
+function updatePomodoro() {
+  if (isRunning) {
+    const currentMillis = millis();
+    if (currentMillis - lastUpdate >= 1000) {
+      timer--;
+      lastUpdate = currentMillis;
+      if (timer <= 0) {
+        if (sessionType === 'Work') {
+          sessionType = 'Break';
+          timer = 5 * 60;
+        } else {
+          sessionType = 'Work';
+          timer = 25 * 60;
+        }
+      }
+    }
+  }
+
+  const minutes = nf(floor(timer / 60), 2);
+  const seconds = nf(timer % 60, 2);
+  document.getElementById('session').textContent = sessionType;
+  document.getElementById('time').textContent = `${minutes}:${seconds}`;
 }
