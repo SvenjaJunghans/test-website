@@ -1,15 +1,175 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sketch1</title>
-    <link rel="stylesheet" type="text/css" href="./libraries/p5js/p5.css">
-  </head>
-  <body>
-    <script src="./libraries/p5js/p5.min.js"></script>
-    <script src="./libraries/p5js/libraries/p5.svg.js"></script>
-    <script src="sketch.js"></script>
-    <script src="./libraries/p5js/libraries/p5.sound.min.js"></script>
-  </body>
+    <title>Minimaler Musik-Visualizer</title>
+    <!-- p5.js und p5.sound.js sind JavaScript-Bibliotheken, die wir für die Audioanalyse und das Zeichnen auf dem Canvas verwenden. -->
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.1/lib/p5.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.1/lib/addons/p5.sound.js"></script>
+    <!-- Tailwind CSS wird für die einfache und responsive Gestaltung der Benutzeroberfläche verwendet. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Grundlegende Stildefinitionen für den Body und das Canvas */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #0d0d0d;
+            color: white;
+            transition: background 0.5s ease;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Positionierung des Steuerungs-Buttons am unteren Bildschirmrand */
+        #controls-container {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center text-white">
+
+    <!-- p5.js Canvas wird hier erstellt und in den Main-Tag eingefügt -->
+    <main></main>
+
+    <!-- UI-Element für die Steuerung der Visualisierung -->
+    <div id="controls-container">
+        <button id="start-stop-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300">
+            Start Visualizer
+        </button>
+    </div>
+
+    <script>
+        // Deklarierung globaler Variablen für die Audioverarbeitung und den Visualisierungszustand
+        let mic; // Audioeingang vom Mikrofon
+        let fft; // FFT-Objekt zur Frequenzanalyse
+        let isRunning = false; // Statusflagge, ob der Visualizer läuft
+        
+        // Farben und Glitch-Variablen für einen dynamischen visuellen Effekt
+        let color1; // Erste Hauptfarbe (Magenta)
+        let color2; // Zweite Hauptfarbe (Cyan)
+        let currentColor; // Aktuelle interpolierte Farbe
+        let glitchColors; // Farben für den Glitch-Effekt
+        let glitchDuration = 1; // Dauer des Glitch-Effekts in Frames
+        let glitchCountdown = 0; // Zähler für den Glitch-Effekt
+
+        // Die setup()-Funktion von p5.js, die einmal beim Start ausgeführt wird.
+        function setup() {
+            // Erstellt ein Canvas, das die Größe des Fensters annimmt
+            createCanvas(windowWidth, windowHeight);
+            
+            // Macht das Canvas transparent, sodass der Body-Hintergrund sichtbar ist
+            document.querySelector('canvas').style.backgroundColor = 'transparent';
+
+            // Initialisiert das Mikrofon-Objekt und das FFT-Objekt für die Audioanalyse
+            mic = new p5.AudioIn();
+            fft = new p5.FFT(0.9, 512); 
+            fft.setInput(mic);
+
+            // Definiert die Hauptfarben und Glitch-Farben
+            color1 = color(255, 0, 255); // Leuchtendes Magenta
+            color2 = color(0, 255, 255); // Leuchtendes Cyan
+            glitchColors = [
+                color(255, 255, 0),    // Neon-Gelb
+                color(0, 255, 0)      // Neon-Grün
+            ];
+            currentColor = color1;
+        }
+
+        // Die draw()-Funktion von p5.js, die kontinuierlich im Animations-Loop ausgeführt wird.
+        function draw() {
+            // Hintergrund mit einer geringen Transparenz zeichnen, um einen Nachzieh-Effekt zu erzeugen
+            background(0, 0, 0, 25);
+
+            // Der Visualisierungscode wird nur ausgeführt, wenn der Visualizer aktiv ist
+            if (isRunning) {
+                let spectrum = fft.analyze(); // Analysiert die Frequenzdaten der Musik
+                let bassEnergy = fft.getEnergy('bass'); // Extrahiert die Energie der Bassfrequenzen
+                
+                // Logik für den Glitch-Effekt
+                const glitchThreshold = 180;
+                if (glitchCountdown > 0) {
+                    glitchCountdown--;
+                } else if (bassEnergy > glitchThreshold) {
+                    let randomGlitchColor = random(glitchColors);
+                    currentColor = randomGlitchColor;
+                    glitchCountdown = glitchDuration;
+                }
+                
+                // Sanfter Übergang zwischen den Hauptfarben, wenn kein Glitch aktiv ist
+                if (glitchCountdown === 0) {
+                    let lerpAmount = map(bassEnergy, 0, 255, 0, 1);
+                    currentColor = lerpColor(color1, color2, lerpAmount);
+                }
+
+                stroke(currentColor); // Setzt die Linienfarbe auf die aktuelle Farbe
+                noFill(); // Deaktiviert die Füllung für die gezeichneten Formen
+
+                let centerX = width / 2; // X-Koordinate der Mitte des Canvas
+                let centerY = height / 2; // Y-Koordinate der Mitte des Canvas
+                
+                let numLines = 120; // Anzahl der radialen Linien
+                let rotationSpeed = map(bassEnergy, 0, 255, 0.1, 0.5); // Rotationsgeschwindigkeit, die vom Bass abhängt
+
+                // Speichert den aktuellen Transformationszustand (Translation und Rotation)
+                push();
+                translate(centerX, centerY); // Verschiebt den Ursprung in die Mitte des Canvas
+                rotate(frameCount * rotationSpeed * 0.01); // Rotiert die gesamte Szene
+
+                // Schleife zum Zeichnen jeder einzelnen radialen Linie
+                for (let i = 0; i < numLines; i++) {
+                    let angle = map(i, 0, numLines, 0, 360); // Berechnet den Winkel für jede Linie
+                    let bassFactor = map(bassEnergy, 0, 255, 0, 1);
+                    // Die Länge der Linie hängt von der Musik und dem Bass ab
+                    let length = map(spectrum[i * 2], 0, 255, 50, 400 * bassFactor);
+                    // Die Linienstärke variiert ebenfalls mit der Musik
+                    let weight = map(spectrum[i], 0, 255, 0.5, 4);
+
+                    let x = cos(radians(angle)) * length;
+                    let y = sin(radians(angle)) * length;
+                    
+                    strokeWeight(weight); // Setzt die Dicke der Linie
+                    line(0, 0, x, y); // Zeichnet eine Linie vom Zentrum nach außen
+                }
+                // Stellt den ursprünglichen Transformationszustand wieder her
+                pop();
+            }
+        }
+
+        // Wird aufgerufen, wenn die Fenstergröße geändert wird
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+
+        // Funktion zum Starten und Stoppen der Visualisierung
+        function toggleVisualizer() {
+            isRunning = !isRunning; // Wechselt den Status
+            const button = document.getElementById('start-stop-btn');
+            if (isRunning) {
+                mic.start(); // Startet das Mikrofon
+                button.textContent = 'Stop Visualizer';
+                button.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                button.classList.add('bg-fuchsia-600', 'hover:bg-fuchsia-700');
+            } else {
+                mic.stop(); // Stoppt das Mikrofon
+                button.textContent = 'Start Visualizer';
+                button.classList.remove('bg-fuchsia-600', 'hover:bg-fuchsia-700');
+                button.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            }
+        }
+
+        // Fügt einen Klick-Event-Listener zum Button hinzu
+        document.getElementById('start-stop-btn').addEventListener('click', toggleVisualizer);
+    </script>
+</body>
 </html>

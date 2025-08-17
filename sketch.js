@@ -1,158 +1,99 @@
-let sound;
-let fft;
-let lines = [];
-let colors;
-
+// sketch.js
+// Globale Variablen für Audio
+let mic; // Mikrofon-Eingang
+let fft; // p5.FFT-Objekt für Audioanalyse
 let isRunning = false;
-let sessionType = 'Work';
-let timer = 25 * 60;
-let lastUpdate = 0;
 
-function preload() {
-  sound = loadSound('Groove.mp3');
-}
+// Arrays für die Visualisierungspunkte
+let lines = [];
+const numLines = 60;
 
-function setup() {
-  createCanvas(windowWidth, windowHeight);
-  noFill();
+// Erstellt ein neues p5-Objekt, das den Sketch im Instanzmodus ausführt
+const sketch = (p) => {
+    // p5.js setup Funktion: Läuft einmal beim Start
+    p.setup = function() {
+        // Erstellt ein Canvas, das dem gesamten Fenster entspricht
+        p.createCanvas(p.windowWidth, p.windowHeight);
+        p.noFill(); // Keine Füllung für Linien und Formen
 
-  // UI
-  let ui = createDiv().id('ui');
-  ui.style('position', 'absolute');
-  ui.style('top', '20px');
-  ui.style('left', '20px');
-  ui.style('z-index', '10');
-
-  let box = createDiv().parent(ui);
-  box.style('background', 'rgba(255,255,255,0.6)');
-  box.style('padding', '12px 18px');
-  box.style('border-radius', '12px');
-  box.style('font-family', 'monospace');
-
-  let sessionText = createDiv('Session: ').parent(box);
-  createSpan('Work').id('session').parent(sessionText);
-
-  createDiv().parent(box);
-  let timeText = createDiv('Time Left: ').parent(box);
-  createSpan('25:00').id('time').parent(timeText);
-
-  createDiv().parent(box);
-  let startStopBtn = createButton('Start/Stop').parent(box);
-  startStopBtn.mousePressed(toggleTimer);
-
-  let resetBtn = createButton('Reset').parent(box);
-  resetBtn.mousePressed(resetTimer);
-
-  // Farben
-  colors = [
-    color('#A8E6CF'), color('#DCEBF9'), color('#E0BBE4'), color('#FFDAB9'), color('#FFB6B9'),
-    color('#B5EAD7'), color('#C7CEEA'), color('#FFDAC1'), color('#E2F0CB'), color('#FFB7B2')
-  ];
-
-  fft = new p5.FFT();
-  fft.setInput(sound);
-
-  createLines();
-}
-
-function createLines() {
-  lines = [];
-  let numLines = 10;
-  let numPoints = floor(width / 20);
-  for (let j = 0; j < numLines; j++) {
-    let line = [];
-    for (let i = 0; i < numPoints; i++) {
-      let x = i * 20;
-      let y = height / 2 + j * 20 - 100;
-      line.push({ x, y });
-    }
-    lines.push(line);
-  }
-}
-
-function draw() {
-  background(255);
-  updatePomodoro();
-
-  let spectrum = fft.analyze();
-  let bandsPerLine = floor(spectrum.length / lines.length);
-  let waveSpeed = 0.01;
-  let baseFreq = 0.01;
-
-  for (let j = 0; j < lines.length; j++) {
-    stroke(colors[j % colors.length]);
-    strokeWeight(2);
-    noFill();
-    beginShape();
-
-    // Energie im zugeordneten Bereich berechnen
-    let startBand = j * bandsPerLine;
-    let endBand = startBand + bandsPerLine;
-    let energy = 0;
-    for (let b = startBand; b < endBand; b++) {
-      energy += spectrum[b];
-    }
-    energy /= bandsPerLine;
-
-    let amp = map(energy, 0, 100, 10, 100);
-    amp = constrain(amp, 5, 120);
-
-    for (let i = 0; i < lines[j].length; i++) {
-      let p = lines[j][i];
-      let wave = sin(frameCount * waveSpeed + i * baseFreq * 100 + j * 10);
-      let offsetY = wave * amp;
-      curveVertex(p.x, p.y + offsetY);
-    }
-
-    endShape();
-  }
-}
-
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-  createLines();
-}
-
-function toggleTimer() {
-  isRunning = !isRunning;
-  lastUpdate = millis();
-
-  if (sound.isPlaying()) {
-    sound.pause();
-  } else {
-    sound.loop();
-  }
-}
-
-function resetTimer() {
-  isRunning = false;
-  sessionType = 'Work';
-  timer = 25 * 60;
-  if (sound.isPlaying()) {
-    sound.pause();
-  }
-}
-
-function updatePomodoro() {
-  if (isRunning) {
-    const currentMillis = millis();
-    if (currentMillis - lastUpdate >= 1000) {
-      timer--;
-      lastUpdate = currentMillis;
-      if (timer <= 0) {
-        if (sessionType === 'Work') {
-          sessionType = 'Break';
-          timer = 5 * 60;
-        } else {
-          sessionType = 'Work';
-          timer = 25 * 60;
+        // Initialisiere die Linien für die Visualisierung
+        for (let i = 0; i < numLines; i++) {
+            lines.push({
+                angle: p.map(i, 0, numLines, 0, 360),
+                length: 0
+            });
         }
-      }
+        
+        // Erstelle das Mikrofon-Objekt nur einmal
+        mic = new p5.AudioIn();
+        fft = new p5.FFT();
+        fft.setInput(mic);
     }
-  }
 
-  const minutes = nf(floor(timer / 60), 2);
-  const seconds = nf(timer % 60, 2);
-  document.getElementById('session').textContent = sessionType;
-  document.getElementById('time').textContent = `${minutes}:${seconds}`;
+    // p5.js draw Funktion: Die Haupt-Rendering-Schleife
+    p.draw = function() {
+        // Semi-transparenter Hintergrund für "Nachzieh-Effekt" auf dunklem Hintergrund
+        p.background(18, 18, 18, 50);
+
+        // Die Visualisierung wird nur gerendert, wenn der Visualizer läuft und FFT initialisiert ist
+        if (isRunning) {
+            let spectrum = fft.analyze();
+            let energy = fft.getEnergy('mid');
+            // Skaliere die Energie, um die Visualisierung größer zu machen
+            let currentAmp = p.map(energy, 0, 255, 10, 200);
+
+            let centerX = p.width / 2;
+            let centerY = p.height / 2;
+
+            // Visualisierung mit "Galaxy Trails"
+            p.colorMode(p.HSB, 360, 100, 100);
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                
+                // Skaliere die Länge der Linie basierend auf dem aktuellen Schalldruck
+                let targetLength = p.map(spectrum[i], 0, 255, 20, 400) + currentAmp;
+                line.length = p.lerp(line.length, targetLength, 0.2);
+
+                let x = centerX + p.cos(p.radians(line.angle)) * line.length;
+                let y = centerY + p.sin(p.radians(line.angle)) * line.length;
+
+                // Zeichne die Linie
+                let hue = p.map(i, 0, lines.length, 0, 360);
+                p.stroke(hue, 80, 90, 100);
+                p.strokeWeight(3);
+                p.line(centerX, centerY, x, y);
+            }
+        }
+    }
+
+    // Passt die Canvas-Größe an, wenn das Fenster geändert wird
+    p.windowResized = function() {
+        p.resizeCanvas(p.windowWidth, p.windowHeight);
+    }
+};
+
+// Erstellt eine Instanz des p5-Sketches
+new p5(sketch, 'main');
+
+// Funktion zum Starten oder Stoppen des Mikrofons und der Visualisierung
+function toggleVisualizer() {
+    isRunning = !isRunning;
+    const button = document.getElementById('start-stop-btn');
+    if (isRunning) {
+        // Versuche das Mikrofon zu starten
+        mic.start();
+        button.textContent = 'Stop Visualizer';
+        button.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+        button.classList.add('bg-rose-600', 'hover:bg-rose-700');
+    } else {
+        // Stoppt das Mikrofon
+        mic.stop();
+        button.textContent = 'Start Visualizer';
+        button.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+        button.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+    }
 }
+
+// Fügt einen Event-Listener zum Button hinzu
+document.getElementById('start-stop-btn').addEventListener('click', toggleVisualizer);
